@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantVertical {
+  RESTAURANT
+  CHURCH
+}
+
+model Tenant {
+  id             String   @id @default(cuid())
+  name           String
+  phoneNumberId  String   @unique
+  vertical       TenantVertical
+  isActive       Boolean  @default(true)
+  configJson     Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  restaurantOrders   RestaurantOrder[]
+  restaurantMenus    RestaurantMenuItem[]
+  churchMembers      ChurchMember[]
+  churchEvents       ChurchEvent[]
+  churchInteractions ChurchInteraction[]
+  churchCheckins     ChurchCheckin[]
+}
+
+//model RestaurantMenuItem {
+//  id          String  @id @default(cuid())
+//  tenantId    String
+//  tenant      Tenant  @relation(fields: [tenantId], references: [id])
+//  code        String
+//  name        String
+//  price       Decimal       // <– removed @db.Decimal
+//  isAvailable Boolean @default(true)
+//  category    String?
+//  sortOrder   Int     @default(0)
+//
+//  orderItems RestaurantOrderItem[]
+//
+//  @@unique([tenantId, code])
+//}
+
+model RestaurantMenuItem {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  code       String   @unique
+  name       String
+  description String? // optional, if you want
+  price      Decimal
+
+  // 👇 ADD THIS (if not present)
+  category   String?  // e.g. "Starters", "Main Course", "Biryanis"
+  cuisine    String?  // optional, if you want to group by cuisine
+
+  isAvailable Boolean @default(true)
+
+  orders     RestaurantOrderItem[]
+  @@unique([tenantId, code])
+}
+
+
+enum RestaurantOrderStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model RestaurantOrder {
+  id            String                @id @default(cuid())
+  tenantId      String
+  tenant        Tenant                @relation(fields: [tenantId], references: [id])
+  customerPhone String
+  status        RestaurantOrderStatus @default(PENDING)
+  total         Decimal               // <– removed @db.Decimal
+  createdAt     DateTime              @default(now())
+
+  items RestaurantOrderItem[]
+}
+
+model RestaurantOrderItem {
+  id         String            @id @default(cuid())
+  orderId    String
+  order      RestaurantOrder   @relation(fields: [orderId], references: [id])
+  menuItemId String
+  menuItem   RestaurantMenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int
+  unitPrice  Decimal           // <– removed @db.Decimal
+}
+
+/********** CHURCH **********/
+
+model ChurchMember {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  phone     String
+  name      String?
+  email     String?
+  dob       DateTime?
+  status    String?
+  consent   Boolean  @default(false)
+  tags      String?
+  createdAt DateTime @default(now())
+
+  interactions ChurchInteraction[]
+  checkins     ChurchCheckin[]
+
+  @@unique([tenantId, phone])
+}
+
+enum ChurchInteractionType {
+  PRAYER_REQUEST
+  GENERAL_MESSAGE
+  CHECKIN
+  DONATION
+  SERMON_LINK
+}
+
+model ChurchInteraction {
+  id        String                @id @default(cuid())
+  tenantId  String
+  tenant    Tenant                @relation(fields: [tenantId], references: [id])
+  memberId  String?
+  member    ChurchMember?         @relation(fields: [memberId], references: [id])
+  type      ChurchInteractionType
+  content   String
+  createdAt DateTime              @default(now())
+
+  @@index([tenantId, type])
+}
+
+model ChurchEvent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  startAt   DateTime
+  endAt     DateTime?
+  qrCodeId  String   @unique
+  createdAt DateTime @default(now())
+
+  checkins ChurchCheckin[]
+}
+
+model ChurchCheckin {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  eventId   String
+  event     ChurchEvent @relation(fields: [eventId], references: [id])
+  memberId  String?
+  member    ChurchMember? @relation(fields: [memberId], references: [id])
+  phone     String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, eventId])
+}
